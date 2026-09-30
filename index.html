@@ -38,7 +38,7 @@ label span{display:block;font-size:.7rem;color:#94a3b8;margin-bottom:.2rem}
     <label><span>Tipo</span><select id="f-tipo"><option value="gasto">Gasto</option><option value="ingreso">Depósito / ingreso</option></select></label>
     <label><span>Fecha</span><input type="date" id="f-fecha" required></label>
     <label><span>Folio / factura</span><input id="f-folio" placeholder="R2930, INV-123…"></label>
-    <label><span>Categoría</span><select id="f-cat"><option>Combustible</option><option>Mantenimiento</option><option>Nómina y cargas</option><option>Handling y aeropuerto</option><option>Viáticos y viajes</option><option>Seguros</option><option>Administración</option><option>Entrenamiento</option><option>Comisiones</option><option>Depósito del cliente</option><option>Otros</option></select></label>
+    <label><span>Categoría</span><select id="f-cat"><option>Combustible</option><option>Mantenimiento</option><option>Nómina y cargas</option><option>Handling y aeropuerto</option><option>Viáticos y viajes</option><option>Arrendamiento</option><option>Seguros</option><option>Administración</option><option>Entrenamiento</option><option>Comisiones</option><option>Depósito del cliente</option><option>Otros</option></select></label>
   </div>
   <label class="block"><span>Concepto o proveedor</span><input id="f-concepto" required></label>
   <div class="grid grid-cols-2 gap-3">
@@ -132,17 +132,48 @@ async function guardarToken(e){
 }
 
 // ===== Cálculos por avión =====
+const ultM=P=>P.meses[P.meses.length-1],ap0=P=>P.aperturaOv!=null?P.aperturaOv:(ultM(P).MXN.cierre||0)+((ultM(P).USD&&ultM(P).USD.cierre)||0)*P.tc;
+const eq=(P,i,k)=>{const M=P.meses.find(x=>x.m===i);if(!M)return null;const u=M.USD,f=(B,c)=>B?(B[c]||0):0;return k==='gasto'?f(M.MXN,'total')+f(u,'total')*P.tc:f(M.MXN,'cierre')+f(u,'cierre')*P.tc};
+const gastosHist=P=>P.meses.map(M=>eq(P,M.m,'gasto')/(M.nm||1));
 const movs=P=>(P.movs||[]).filter(m=>m.fecha>CORTE),suma=(a,t)=>a.filter(m=>m.tipo===t).reduce((s,m)=>s+m.base,0);
-function tot(P){const ms=movs(P),ing=suma(ms,'ingreso'),gas=suma(ms,'gasto');return{ing,gas,disp:P.apertura+ing-gas}}
+function tot(P){const ms=movs(P),ing=suma(ms,'ingreso'),gas=suma(ms,'gasto');return{ing,gas,disp:ap0(P)+ing-gas}}
 function serie(P){
-  const ms=movs(P);let u=7;ms.forEach(m=>u=Math.max(u,+m.fecha.slice(5,7)-1));const saldo=[],gasto=[];let ac=P.apertura;
+  const ms=movs(P);let u=7;ms.forEach(m=>u=Math.max(u,+m.fecha.slice(5,7)-1));const saldo=[],gasto=[];let ac=ap0(P);
   for(let i=0;i<=u;i++){
-    if(i<=7){saldo.push(i===7?P.apertura:P.saldo[i]);gasto.push(P.gastos[i]);continue}
+    if(i<=7){saldo.push(i===7?ap0(P):eq(P,i,'saldo'));gasto.push(eq(P,i,'gasto'));continue}
     const d=ms.filter(m=>+m.fecha.slice(5,7)-1===i),g=suma(d,'gasto');ac+=suma(d,'ingreso')-g;saldo.push(ac);gasto.push(g);
   }
   return{saldo,gasto};
 }
 function estado(P,d){return d<0?{t:'Sin fondos: saldo por cobrar',c:'text-rose-400',b:'bg-rose-500'}:d<P.umbral?{t:'Por debajo del mínimo',c:'text-amber-400',b:'bg-amber-500'}:{t:'Con fondos',c:'text-emerald-400',b:'bg-emerald-500'}}
+
+// ===== Detalle de lo gastado y lo disponible =====
+let SEL='7';
+const usd=v=>'US$'+new Intl.NumberFormat('es-MX',{minimumFractionDigits:2}).format(v||0);
+const selOk=(P,sel)=>sel==='all'||P.meses.some(M=>String(M.m)===String(sel))?sel:'all';
+function periodo(P,sel){
+  const r={};P.meses.filter(M=>sel==='all'||String(M.m)===String(sel)).forEach(M=>['MXN','USD'].forEach(c=>{const B=M[c];if(!B)return;
+    const R=r[c]=r[c]||{items:[],extras:[],depositos:[],total:0,apertura:B.apertura||0,cierre:0};
+    R.items.push(...B.items.map(x=>({...x,etq:M.etq})));R.extras.push(...B.extras.map(x=>({...x,etq:M.etq})));R.depositos.push(...B.depositos.map(x=>({...x,etq:M.etq})));R.total+=B.total||0;R.cierre=B.cierre||0}));
+  return r;
+}
+function catEq(P,sel){const R=periodo(P,sel),o={};['MXN','USD'].forEach(c=>R[c]&&[...R[c].items,...R[c].extras].forEach(x=>o[x.cat]=(o[x.cat]||0)+x.base*(c==='USD'?P.tc:1)));return o}
+function chips(list,cur){return '<div class="noprint flex flex-wrap gap-1">'+list.map(o=>`<button onclick="SEL='${o.v}';render()" class="px-3 py-1 rounded-full text-xs border ${String(cur)===String(o.v)?'bg-sky-600 border-sky-500':'border-slate-600 text-slate-300'}">${esc(o.e)}</button>`).join('')+'</div>'}
+function detalle(P,sel){
+  const R=periodo(P,sel);if(!R.MXN&&!R.USD)return '<p class="text-sm text-slate-500 p-3">Sin datos de este periodo.</p>';
+  return ['MXN','USD'].filter(c=>R[c]).map(c=>{
+    const B=R[c],f=c==='USD'?usd:mxn,dep=B.depositos.reduce((s,d)=>s+d.base,0),all=[...B.items,...B.extras],cats={};
+    all.forEach(x=>{const o=cats[x.cat]=cats[x.cat]||{n:0,t:0};o.n++;o.t+=x.base});const tg=all.reduce((s,x)=>s+x.base,0)||1;
+    const ce=(a,v,cl='')=>`<div class="bg-slate-900/60 rounded-xl p-3"><div class="text-[11px] text-slate-400">${a}</div><div class="num font-bold ${cl}">${v}</div></div>`;
+    const th='class="p-2 text-left font-normal"',tr='class="border-b border-slate-700/50"';
+    return `<div class="space-y-3"><h4 class="font-semibold text-sm">${c==='USD'?'Gastos en dólares (USD)':'Gastos en pesos (MXN)'}</h4>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">${ce('Saldo inicial',f(B.apertura))+ce('+ Depósitos (sin IVA)',f(dep),'text-emerald-400')+ce('− Gastado',f(B.total),'text-rose-400')+ce('= Disponible (saldo final)',f(B.cierre),B.cierre<0?'text-rose-400':'text-emerald-400')}</div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="overflow-x-auto"><table class="w-full text-sm num"><thead class="text-xs text-slate-400"><tr><th ${th}>Categoría</th><th class="p-2 text-right font-normal">Partidas</th><th class="p-2 text-right font-normal">Gastado</th><th class="p-2 text-right font-normal">%</th></tr></thead><tbody>${Object.entries(cats).sort((a,b)=>b[1].t-a[1].t).map(([k,o])=>`<tr ${tr}><td class="p-2">${esc(k)}<div class="h-1 mt-1 rounded bg-sky-500/70" style="width:${(o.t/tg*100).toFixed(0)}%"></div></td><td class="p-2 text-right">${o.n}</td><td class="p-2 text-right">${f(o.t)}</td><td class="p-2 text-right text-slate-400">${(o.t/tg*100).toFixed(1)}%</td></tr>`).join('')}</tbody></table></div>
+      <div class="overflow-x-auto"><table class="w-full text-sm num"><thead class="text-xs text-slate-400"><tr><th ${th}>Depósito / factura</th><th class="p-2 text-right font-normal">Sin IVA</th><th class="p-2 text-right font-normal">IVA</th><th class="p-2 text-right font-normal">Total</th></tr></thead><tbody>${B.depositos.length?B.depositos.map(d=>`<tr ${tr}><td class="p-2">${esc(d.folio)} <span class="text-slate-500 text-xs">${esc(d.etq)}</span></td><td class="p-2 text-right text-emerald-400">${f(d.base)}</td><td class="p-2 text-right text-slate-400">${f(d.iva)}</td><td class="p-2 text-right">${f(d.total)}</td></tr>`).join(''):'<tr><td colspan="4" class="p-3 text-slate-500">Sin depósitos en este periodo.</td></tr>'}</tbody></table></div></div>
+    <div class="overflow-x-auto max-h-96 overflow-y-auto border border-slate-700/60 rounded-xl"><table class="w-full text-sm"><thead class="text-xs text-slate-400 sticky top-0 bg-slate-800"><tr><th ${th}>Fecha</th><th ${th}>Concepto / proveedor</th><th ${th}>Folio</th><th ${th}>Categoría</th><th class="p-2 text-right font-normal">Importe</th></tr></thead><tbody>${all.map(x=>`<tr ${tr}><td class="p-2 text-slate-400 whitespace-nowrap">${x.fecha||(x.etq?x.etq+' · cargo del mes':'')}</td><td class="p-2 font-medium">${esc(x.concepto)}</td><td class="p-2 text-slate-400">${esc(x.folio&&x.folio!=='None'?x.folio:'—')}</td><td class="p-2 text-slate-400">${esc(x.cat)}</td><td class="p-2 text-right num">${f(x.base)}</td></tr>`).join('')}</tbody></table></div></div>`;
+  }).join('<hr class="border-slate-700 my-4">');
+}
 
 // ===== Vista =====
 function render(){
@@ -158,7 +189,7 @@ function render(){
     $('vista').innerHTML=`<div class="max-w-sm mx-auto mt-10 bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-3 text-center"><div class="text-4xl">🔒</div><h2 class="font-bold text-lg">${esc(ORDER.find(o=>o[0]===TAB)[1])}</h2><p class="text-xs text-slate-400">Escribe la contraseña de esta pestaña. Los datos están cifrados y solo se descifran en tu navegador.</p><input type="password" id="pw" autocomplete="off" onkeydown="if(event.key==='Enter')desbloquear()"><p id="pwMsg" class="text-xs text-rose-400 min-h-4"></p><button onclick="desbloquear()" class="w-full bg-sky-600 hover:bg-sky-500 rounded-lg py-2 font-semibold">Entrar</button></div>`;
     setTimeout(()=>$('pw')&&$('pw').focus(),50);return;
   }
-  const t=tot(P),e=estado(P,t.disp),h=P.gastos.filter(x=>x!=null),prom=h.length?h.reduce((a,b)=>a+b,0)/h.length:0;
+  const t=tot(P),e=estado(P,t.disp),h=gastosHist(P),prom=h.length?h.reduce((a,b)=>a+b,0)/h.length:0;
   const aut=t.disp>0&&prom>0?(t.disp/prom).toFixed(1)+' meses':'—',pct=Math.max(0,Math.min(100,P.umbral>0?t.disp/(P.umbral*2)*100:0));
   const k=(a,v,c='text-white')=>`<div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><div class="text-xs text-slate-400">${a}</div><div class="num text-xl font-extrabold mt-1 ${c}">${v}</div></div>`;
   const ms=movs(P).sort((a,b)=>b.fecha.localeCompare(a.fecha));
@@ -171,7 +202,8 @@ function render(){
     <p class="text-xs text-slate-500">${esc(P.origen)}</p>
     ${(P.alertas||[]).map(x=>`<p class="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-lg p-2">${esc(x)}</p>`).join('')}
   </section>
-  <section class="grid grid-cols-2 lg:grid-cols-5 gap-3">${k('Saldo al corte ('+CORTE+')',mxn(P.apertura))+k('Depósitos capturados',mxn(t.ing),'text-emerald-400')+k('Gastos capturados',mxn(t.gas),'text-rose-400')+k('Gasto mensual promedio',mxn(prom))+k('Autonomía estimada',aut)}</section>
+  <section class="grid grid-cols-2 lg:grid-cols-5 gap-3">${k('Saldo al corte ('+CORTE+')',mxn(ap0(P)))+k('Depósitos capturados',mxn(t.ing),'text-emerald-400')+k('Gastos capturados',mxn(t.gas),'text-rose-400')+k('Gasto mensual promedio',mxn(prom))+k('Autonomía estimada',aut)}</section>
+  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 space-y-3"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold">Detalle de lo gastado y lo disponible</h3>${chips([...P.meses.map(M=>({v:M.m,e:M.etq})),{v:'all',e:'Todo el año'}],selOk(P,SEL))}</div>${detalle(P,selOk(P,SEL))}</section>
   <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Saldo al cierre de cada mes</h3><div class="relative h-56"><canvas id="c1"></canvas></div></div>
     <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Gasto mensual</h3><div class="relative h-56"><canvas id="c2"></canvas></div></div>
@@ -217,9 +249,10 @@ async function editarAvion(){
   if(!TOKEN){abrirTok();return}const P=PLAIN[TAB];
   const mat=prompt('Matrícula o modelo:',P.matricula);if(mat===null)return;
   const u=prompt('Mínimo de alerta en MXN:',P.umbral);if(u===null)return;
-  const ap=prompt('Saldo al corte del '+CORTE+' en MXN:',P.apertura);if(ap===null)return;
-  const n=+ap.replace(/[,$\s]/g,'');if(!isFinite(n)||ap.trim()===''){toast('Saldo inválido');return}
-  try{await sincronizar(TAB,Q=>{Q.matricula=mat.trim()||Q.matricula;Q.umbral=Math.max(0,+u||0);Q.apertura=n},'Ajustes '+TAB);render();toast('Ajustes guardados')}catch(err){toast('No se guardó: '+err.message)}
+  const tcv=prompt('Tipo de cambio de referencia USD→MXN (para sumar el saldo en dólares):',P.tc);if(tcv===null)return;
+  const ap=prompt('Saldo al corte en MXN (déjalo igual para usar el de los Excel; escribe «reset» para volver al de los Excel):',ap0(P).toFixed(2));if(ap===null)return;
+  const rs=ap.trim().toLowerCase()==='reset',n=+ap.replace(/[,$\s]/g,'');if(!rs&&(!isFinite(n)||ap.trim()==='')){toast('Saldo inválido');return}
+  try{await sincronizar(TAB,Q=>{Q.matricula=mat.trim()||Q.matricula;Q.umbral=Math.max(0,+u||0);Q.tc=+tcv>0?+tcv:Q.tc;if(rs||Math.abs(n-ap0(P))<0.01&&Q.aperturaOv==null)delete Q.aperturaOv;else Q.aperturaOv=n},'Ajustes '+TAB);render();toast('Ajustes guardados')}catch(err){toast('No se guardó: '+err.message)}
 }
 async function cambiarClave(){
   if(!TOKEN){abrirTok();return}
@@ -249,11 +282,14 @@ function renderFlota(){
   <div class="flex flex-wrap justify-between gap-3 items-center"><h2 class="font-bold text-xl">Flota Jet Mach · los tres aviones</h2><div class="noprint flex gap-2 text-sm"><button onclick="cambiarClave()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Cambiar contraseña de Jet Mach</button><button onclick="window.print()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Imprimir</button><button onclick="bloquear('jet')" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Bloquear</button></div></div>
   ${IDS.filter(i=>!PLAIN[i]).map(i=>`<div class="bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-xl p-3 text-sm flex flex-wrap gap-3 items-center"><span>La contraseña de ${esc(ORDER.find(o=>o[0]===i)[1])} cambió y aquí no se puede abrir.</span><button onclick="actualizarLlave('${i}')" class="bg-amber-600 text-white px-3 py-1 rounded-lg font-semibold">Actualizar</button></div>`).join('')}
   <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">${k('Disponible de la flota',mxn(disp),disp<0?'text-rose-400':'text-emerald-400')+k('Depósitos capturados',mxn(sm(i=>T[i].ing)),'text-emerald-400')+k('Gastos capturados',mxn(sm(i=>T[i].gas)),'text-rose-400')+k('Aviones bajo su mínimo',baj+' de '+L.length,baj?'text-amber-400':'text-emerald-400')}</section>
-  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">${L.map(i=>{const P=PLAIN[i],e=estado(P,T[i].disp),h=P.gastos.filter(x=>x!=null),pr=h.length?h.reduce((a,b)=>a+b,0)/h.length:0,pct=Math.max(0,Math.min(100,P.umbral>0?T[i].disp/(P.umbral*2)*100:0));
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">${L.map(i=>{const P=PLAIN[i],e=estado(P,T[i].disp),h=gastosHist(P),pr=h.length?h.reduce((a,b)=>a+b,0)/h.length:0,pct=Math.max(0,Math.min(100,P.umbral>0?T[i].disp/(P.umbral*2)*100:0));
     return `<article class="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 space-y-2" style="border-top:4px solid ${P.color}"><div class="flex justify-between"><div><h3 class="font-bold">${esc(P.nombre)}</h3><p class="text-xs text-slate-400">${esc(P.matricula)}${P.modelo?' · '+esc(P.modelo):''}</p></div><button class="noprint text-xs text-slate-400 hover:text-white underline" onclick="TAB='${i}';render()">Abrir</button></div>
     <div class="num text-3xl font-extrabold ${T[i].disp<0?'text-rose-400':''}">${mxn(T[i].disp)}</div><div class="text-sm font-medium ${e.c}">${e.t}</div><div class="h-2 bg-slate-700 rounded-full overflow-hidden"><div class="h-full ${e.b}" style="width:${pct}%"></div></div>
-    <dl class="text-sm num space-y-1"><div class="flex justify-between"><dt class="text-slate-400">Saldo al corte</dt><dd>${mxn(P.apertura)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Depósitos</dt><dd class="text-emerald-400">${mxn(T[i].ing)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Gastos</dt><dd class="text-rose-400">${mxn(T[i].gas)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Mínimo de alerta</dt><dd>${mxn(P.umbral)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Autonomía</dt><dd>${T[i].disp>0&&pr>0?(T[i].disp/pr).toFixed(1)+' meses':'—'}</dd></div></dl>
+    <dl class="text-sm num space-y-1"><div class="flex justify-between"><dt class="text-slate-400">Saldo al corte</dt><dd>${mxn(ap0(P))}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Depósitos</dt><dd class="text-emerald-400">${mxn(T[i].ing)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Gastos</dt><dd class="text-rose-400">${mxn(T[i].gas)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Mínimo de alerta</dt><dd>${mxn(P.umbral)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Autonomía</dt><dd>${T[i].disp>0&&pr>0?(T[i].disp/pr).toFixed(1)+' meses':'—'}</dd></div></dl>
     ${(P.alertas||[]).length?'<p class="text-xs text-amber-300">⚠ '+P.alertas.length+' aviso(s) de datos: ábrelo para verlos</p>':''}</article>`}).join('')}</section>
+  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 space-y-4"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold">Detalle de lo gastado y lo disponible · los tres aviones</h3>${chips([...MESES.map((e,v)=>({v,e})),{v:'all',e:'Todo el año'}],SEL)}</div>
+    ${(()=>{const cs=L.map(i=>catEq(PLAIN[i],SEL)),ks=[...new Set(cs.flatMap(o=>Object.keys(o)))].sort((a,b)=>cs.reduce((t,o)=>t+(o[b]||0),0)-cs.reduce((t,o)=>t+(o[a]||0),0));return ks.length?`<div class="overflow-x-auto"><table class="w-full text-sm num"><thead class="text-xs text-slate-400"><tr><th class="p-2 text-left font-normal">Gasto por categoría (MXN, USD al TC de referencia)</th>${L.map(i=>`<th class="p-2 text-right font-normal" style="color:${PLAIN[i].color}">${esc(PLAIN[i].nombre)}</th>`).join('')}<th class="p-2 text-right font-normal">Flota</th></tr></thead><tbody>${ks.map(k=>`<tr class="border-b border-slate-700/50"><td class="p-2">${esc(k)}</td>${cs.map(o=>`<td class="p-2 text-right">${o[k]?mxn(o[k]):'—'}</td>`).join('')}<td class="p-2 text-right font-semibold">${mxn(cs.reduce((t,o)=>t+(o[k]||0),0))}</td></tr>`).join('')}<tr class="font-bold"><td class="p-2">Total gastado</td>${cs.map(o=>`<td class="p-2 text-right">${mxn(Object.values(o).reduce((a,b)=>a+b,0))}</td>`).join('')}<td class="p-2 text-right">${mxn(cs.reduce((t,o)=>t+Object.values(o).reduce((a,b)=>a+b,0),0))}</td></tr></tbody></table></div>`:'<p class="text-sm text-slate-500">Sin datos de este periodo.</p>'})()}
+    ${L.map(i=>`<details open class="border border-slate-700 rounded-xl p-3" style="border-left:4px solid ${PLAIN[i].color}"><summary class="cursor-pointer font-bold">${esc(PLAIN[i].nombre)} <span class="text-xs font-normal text-slate-400">· ${esc(PLAIN[i].matricula)}</span></summary><div class="mt-3">${detalle(PLAIN[i],selOk(PLAIN[i],SEL))}</div></details>`).join('')}</section>
   <section class="grid grid-cols-1 lg:grid-cols-2 gap-4"><div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Saldo al cierre de cada mes</h3><div class="relative h-64"><canvas id="c1"></canvas></div></div><div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Gasto mensual por avión</h3><div class="relative h-64"><canvas id="c2"></canvas></div></div></section>
   <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-3">Cierre mensual de la flota</h3><div class="overflow-x-auto"><table class="w-full text-sm num">${th}</tbody></table></div><p class="text-xs text-slate-500 mt-2">El saldo de flota solo se suma en los meses donde los tres aviones tienen dato.</p></section>
   <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-3">Últimos movimientos de la flota</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left"><tbody>${ult.length?ult.map(m=>`<tr class="border-b border-slate-700/50"><td class="p-2 text-slate-400">${m.fecha}</td><td class="p-2 font-semibold" style="color:${m.c}">${esc(m.av)}</td><td class="p-2">${esc(m.concepto)}</td><td class="p-2 text-slate-400">${esc(m.cat)}</td><td class="p-2 text-right num font-semibold ${m.tipo==='ingreso'?'text-emerald-400':''}">${m.tipo==='ingreso'?'+':'−'}${mxn(m.base)}</td></tr>`).join(''):'<tr><td class="p-6 text-center text-slate-500">Aún no hay movimientos posteriores al '+CORTE+'.</td></tr>'}</tbody></table></div><p class="text-xs text-slate-500 mt-2">Esta pestaña es de consulta. Para capturar, abre la pestaña de cada avión.</p></section>`;
