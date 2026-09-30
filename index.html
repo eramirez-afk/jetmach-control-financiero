@@ -8,384 +8,230 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-body{font-family:'Inter',system-ui,sans-serif}
-.num{font-variant-numeric:tabular-nums}
+body{font-family:'Inter',system-ui,sans-serif}.num{font-variant-numeric:tabular-nums}
 dialog{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:16px;padding:0;max-width:30rem;width:92vw}
 dialog::backdrop{background:rgba(2,6,23,.7)}
 input,select{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:.5rem .65rem;width:100%;color:#f1f5f9}
 input:focus,select:focus,button:focus-visible{outline:2px solid #38bdf8;outline-offset:1px}
 label span{display:block;font-size:.7rem;color:#94a3b8;margin-bottom:.2rem}
-@media print{body{background:#fff;color:#000}header button,header label,#cards button,#filtros,td button{display:none!important}*{color:#000!important;background:transparent!important;border-color:#999!important}canvas{max-height:220px}}
+@media print{body{background:#fff}header,nav,.noprint,td button{display:none!important}*{color:#000!important;background:transparent!important;border-color:#999!important}}
 </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
-
 <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30">
   <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-lg font-bold tracking-tight">Jet Mach <span class="text-sky-400">Control Financiero AOC</span></h1>
-      <p class="text-xs text-slate-400">Cuánto tiene disponible cada avión · saldos al corte del <span id="corte"></span> + movimientos capturados</p>
-    </div>
+    <div><h1 class="text-lg font-bold tracking-tight">Jet Mach <span class="text-sky-400">Control Financiero AOC</span></h1>
+      <p class="text-xs text-slate-400">Datos cifrados: cada pestaña se abre solo con su contraseña</p></div>
     <div class="flex flex-wrap items-center gap-2 text-sm">
       <span id="estado" class="text-xs mr-1"></span>
-      <button id="btnTok" onclick="TOKEN?quitarToken():abrirTok()" class="bg-emerald-700 hover:bg-emerald-600 px-3 py-2 rounded-lg font-semibold"></button>
-      <button onclick="abrirForm()" class="bg-sky-600 hover:bg-sky-500 px-3.5 py-2 rounded-lg font-semibold">Capturar movimiento</button>
-      <button onclick="exportJSON()" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg border border-slate-600">Exportar respaldo</button>
-      <label class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg border border-slate-600 cursor-pointer">Cargar respaldo<input type="file" accept=".json" class="hidden" onchange="importJSON(event)"></label>
-      <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg border border-slate-600">Imprimir resumen</button>
-      <button onclick="exportCSV()" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg border border-slate-600">CSV de movimientos</button>
+      <button id="btnTok" onclick="TOKEN?quitarToken():abrirTok()" class="px-3 py-2 rounded-lg font-semibold"></button>
+      <button onclick="bloquearTodo()" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg border border-slate-600">Bloquear todo</button>
     </div>
   </div>
+  <nav id="tabs" class="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto"></nav>
 </header>
+<main id="vista" class="max-w-7xl mx-auto px-4 py-6 space-y-6"></main>
 
-<div id="pend" class="hidden max-w-7xl mx-auto px-4 pt-4"><div class="bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-xl p-3 text-sm flex flex-wrap items-center gap-3"><span id="pendTxt"></span><button onclick="subirPend()" class="bg-amber-600 px-3 py-1 rounded-lg font-semibold text-white">Subir a la nube</button><button onclick="descartarPend()" class="underline">Descartar</button></div></div>
-<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
-
-  <section class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="kpis"></section>
-
-  <section id="cards" class="grid grid-cols-1 lg:grid-cols-3 gap-4"></section>
-
-  <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-    <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4">
-      <h2 class="font-semibold mb-3">Saldo al cierre de cada mes</h2>
-      <div class="relative h-64"><canvas id="chSaldo"></canvas></div>
-    </div>
-    <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4">
-      <h2 class="font-semibold mb-3">Gasto mensual</h2>
-      <div class="relative h-64"><canvas id="chGasto"></canvas></div>
-    </div>
-  </section>
-
-  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4">
-    <h2 class="font-semibold mb-3">Cierre mensual por avión</h2>
-    <div class="overflow-x-auto"><table class="w-full text-sm text-left num" id="tmes"></table></div>
-    <p class="text-xs text-slate-500 mt-3">Gasto = total de gastos del mes sin IVA, como en tus Excel. Saldo = lo que quedaba disponible al cerrar el mes. Los meses en blanco no tienen hoja en el Excel.</p>
-  </section>
-
-  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-      <h2 class="font-semibold">Movimientos capturados desde el corte</h2>
-      <div class="flex gap-2" id="filtros"></div>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm text-left">
-        <thead class="text-xs text-slate-400 border-b border-slate-700">
-          <tr><th class="p-2">Fecha</th><th class="p-2">Avión</th><th class="p-2">Concepto</th><th class="p-2">Folio</th><th class="p-2">Categoría</th><th class="p-2 text-right">Importe (sin IVA)</th><th class="p-2 text-right">IVA</th><th class="p-2"></th></tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-    <p class="text-xs text-slate-500 mt-3">El saldo se calcula igual que en tus Excel: saldo inicial + depósitos − gastos, todo sin IVA. El IVA se guarda como dato de control.</p>
-  </section>
-</main>
-
-<dialog id="dlg">
-  <form onsubmit="guardar(event)" class="p-5 space-y-3">
-    <h3 class="font-bold text-lg" id="dlgTitulo">Capturar movimiento</h3>
-    <input type="hidden" id="f-id">
-    <div class="grid grid-cols-2 gap-3">
-      <label><span>Avión</span><select id="f-avion"></select></label>
-      <label><span>Tipo</span><select id="f-tipo"><option value="gasto">Gasto</option><option value="ingreso">Depósito / ingreso</option></select></label>
-      <label><span>Fecha</span><input type="date" id="f-fecha" required></label>
-      <label><span>Folio / factura</span><input id="f-folio" placeholder="R2930, INV-123…"></label>
-    </div>
-    <label class="block"><span>Concepto o proveedor</span><input id="f-concepto" required placeholder="WORLD FUEL, ASERTEC, NÓMINA…"></label>
-    <div class="grid grid-cols-2 gap-3">
-      <label><span>Categoría</span>
-        <select id="f-cat"><option>Combustible</option><option>Mantenimiento</option><option>Nómina y cargas</option><option>Handling y aeropuerto</option><option>Viáticos y viajes</option><option>Seguros</option><option>Administración</option><option>Entrenamiento</option><option>Comisiones</option><option>Depósito del cliente</option><option>Otros</option></select></label>
-      <label><span>Moneda</span><select id="f-mon" onchange="calc()"><option>MXN</option><option>USD</option></select></label>
-      <label><span>Importe sin IVA</span><input type="number" step="0.01" id="f-monto" required oninput="calc()"></label>
-      <label><span>Tipo de cambio (solo USD)</span><input type="number" step="0.0001" id="f-tc" value="18" oninput="calc()"></label>
-      <label><span>IVA</span><select id="f-ivap" onchange="calc()"><option value="0.16">16%</option><option value="0">Sin IVA</option></select></label>
-      <label><span>Total en MXN con IVA</span><input id="f-total" readonly></label>
-    </div>
-    <div class="flex justify-end gap-2 pt-2">
-      <button type="button" onclick="dlg.close()" class="px-3 py-2 rounded-lg bg-slate-700">Cancelar</button>
-      <button class="px-4 py-2 rounded-lg bg-sky-600 font-semibold">Guardar movimiento</button>
-    </div>
-  </form>
-</dialog>
+<dialog id="dlg"><form onsubmit="guardar(event)" class="p-5 space-y-3">
+  <h3 class="font-bold text-lg" id="dlgTitulo">Capturar movimiento</h3><input type="hidden" id="f-id">
+  <div class="grid grid-cols-2 gap-3">
+    <label><span>Tipo</span><select id="f-tipo"><option value="gasto">Gasto</option><option value="ingreso">Depósito / ingreso</option></select></label>
+    <label><span>Fecha</span><input type="date" id="f-fecha" required></label>
+    <label><span>Folio / factura</span><input id="f-folio" placeholder="R2930, INV-123…"></label>
+    <label><span>Categoría</span><select id="f-cat"><option>Combustible</option><option>Mantenimiento</option><option>Nómina y cargas</option><option>Handling y aeropuerto</option><option>Viáticos y viajes</option><option>Seguros</option><option>Administración</option><option>Entrenamiento</option><option>Comisiones</option><option>Depósito del cliente</option><option>Otros</option></select></label>
+  </div>
+  <label class="block"><span>Concepto o proveedor</span><input id="f-concepto" required></label>
+  <div class="grid grid-cols-2 gap-3">
+    <label><span>Moneda</span><select id="f-mon" onchange="calc()"><option>MXN</option><option>USD</option></select></label>
+    <label><span>Tipo de cambio (solo USD)</span><input type="number" step="0.0001" id="f-tc" value="18" oninput="calc()"></label>
+    <label><span>Importe sin IVA</span><input type="number" step="0.01" id="f-monto" required oninput="calc()"></label>
+    <label><span>IVA</span><select id="f-ivap" onchange="calc()"><option value="0.16">16%</option><option value="0">Sin IVA</option></select></label>
+  </div>
+  <label class="block"><span>Total en MXN con IVA</span><input id="f-total" readonly></label>
+  <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="dlg.close()" class="px-3 py-2 rounded-lg bg-slate-700">Cancelar</button><button class="px-4 py-2 rounded-lg bg-sky-600 font-semibold">Guardar movimiento</button></div>
+</form></dialog>
 
 <dialog id="dlgTok"><form onsubmit="guardarToken(event)" class="p-5 space-y-3">
   <h3 class="font-bold text-lg">Conectar con GitHub para editar</h3>
-  <p class="text-xs text-slate-400">Pega el token del repositorio. Se guarda solo en este navegador y permite que lo que captures se sincronice para todos. Sin token la página es de solo lectura.</p>
+  <p class="text-xs text-slate-400">Pega el token del repositorio. Se guarda solo en este navegador. Sin token puedes consultar, pero no capturar.</p>
   <input type="password" id="t-val" autocomplete="off" placeholder="github_pat_…" required>
   <p id="t-msg" class="text-xs text-amber-300 min-h-4"></p>
   <div class="flex justify-end gap-2"><button type="button" onclick="dlgTok.close()" class="px-3 py-2 rounded-lg bg-slate-700">Cancelar</button><button class="px-4 py-2 rounded-lg bg-emerald-700 font-semibold">Conectar</button></div>
 </form></dialog>
-
 <div id="toast" class="fixed bottom-5 right-5 bg-slate-700 px-4 py-2 rounded-lg text-sm shadow-lg opacity-0 transition-opacity pointer-events-none"></div>
 
 <script>
-// ===== Datos base: cierre de agosto 2026, tomado de los tres Excel =====
-const CORTE='2026-08-31';
+const CORTE='2026-08-31',REPO='eramirez-afk/jetmach-control-financiero',BRANCH='main',API=`https://api.github.com/repos/${REPO}/contents/data.json`;
 const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-const SEED={
-  inver:{nombre:'Inmobiliaria Inver',matricula:'XA-BZN',modelo:'Challenger 300',umbral:500000,color:'#38bdf8',
-    apertura:1031289.18,
-    origen:'Cierre de agosto: $925,906.78 (gastos en MXN) + $105,382.40 (gastos en USD)',
-    gastos:[1132409.43,1070633.01,989891.16,1222246.88,2294323.42,927509.76,1320852.77,1093457.27],
-    saldo:[-1105290.76,-452820.65,282109.70,790946.23,1373836.87,641421.95,-487919.65,1031289.18],
-    alertas:['El saldo inicial de agosto ($-268,720.06) está escrito a mano y no coincide con el cierre de julio ($-617,353.59): diferencia de $348,633.53.','La hoja SEPTIEMBRE 2026 es copia de agosto; en el bloque de USD trae R2930 (saldo $105,989.86) en lugar de R2881 (saldo $105,382.40). Aquí se usó agosto.']},
-  red:{nombre:'Red Ambiental',matricula:'Por definir',modelo:'',umbral:1000000,color:'#34d399',
-    apertura:1301493.66,
-    origen:'Cierre de agosto tal como aparece en el Excel',
-    gastos:[4294161.10,6910974.32,4837234.13,3791955.24,4951576.41,4463526.26,4079039.28,5133319.34],
-    saldo:[-2225507.02,-2238981.34,-2626215.47,-1840670.71,-2342247.12,-2355773.37,-1984812.66,1301493.66],
-    alertas:['Revisar: julio cierra en $-1,984,812.66 pero agosto abre con +$1,984,813 (signo invertido). Si el saldo inicial de agosto fuera negativo, el saldo real al cierre sería $-2,668,132.34 y no +$1,301,493.66.']},
-  pasa:{nombre:'PASA',matricula:'Pilatus PC-12',modelo:'',umbral:500000,color:'#fb7185',
-    apertura:-985083.90,
-    origen:'Hoja única julio–agosto: gastos $2,575,083.90 (incluye administración $159,000) contra depósito R2795 de $1,590,000',
-    gastos:[null,null,null,null,null,null,null,2575083.90],
-    saldo:[null,null,null,null,null,null,null,-985083.90],
-    alertas:[]}
-};
-
-// ===== Estado (solo se guardan movimientos y ajustes; los saldos base vienen del código) =====
-const KEY='jetmach_control_financiero_v2', KEY_OLD='aviacontrol_v2';
-let S={aj:{},movs:[]}, filtro='todos', charts={};
-const $=id=>document.getElementById(id);
-const mxn=v=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(v||0);
+const ORDER=[['inver','Inmobiliaria Inver'],['red','Red Ambiental'],['pasa','PASA']];
+const PAL=['#38bdf8','#34d399','#fbbf24','#fb7185','#a78bfa','#f472b6','#2dd4bf','#fb923c','#94a3b8','#818cf8','#4ade80'];
+const $=id=>document.getElementById(id),mxn=v=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(v||0);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const av=id=>({...SEED[id],...(S.aj[id]||{})});
-const ids=Object.keys(SEED);
+let TAB='inver',PLAIN={},KEYS={},charts={},ESTADO='',HORA='',TOKEN=localStorage.getItem('jm_token')||'';
+function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2600)}
 
-const REPO='eramirez-afk/jetmach-control-financiero',BRANCH='main',API=`https://api.github.com/repos/${REPO}/contents/data.json`;
-let TOKEN=localStorage.getItem('jm_token')||'',SHA=null,ESTADO='cargando',HORA='';
-function cargar(){try{const t=localStorage.getItem(KEY)||localStorage.getItem(KEY_OLD);if(t){S=JSON.parse(t);S.aj=S.aj||{};S.movs=S.movs||[]}}catch(e){}}
-function guardarLocal(){localStorage.setItem(KEY,JSON.stringify(S))}
-const b64d=t=>new TextDecoder().decode(Uint8Array.from(atob(t.replace(/\n/g,'')),c=>c.charCodeAt(0)));
-const b64e=t=>{let r='';new TextEncoder().encode(t).forEach(x=>r+=String.fromCharCode(x));return btoa(r)};
+// ===== Cifrado: PBKDF2 (contraseña → llave) + AES-GCM. La contraseña nunca sale del navegador =====
+const enc=new TextEncoder(),dec=new TextDecoder();
+const b64=u=>{let r='';new Uint8Array(u).forEach(x=>r+=String.fromCharCode(x));return btoa(r)};
+const unb64=t=>Uint8Array.from(atob(t.replace(/\n/g,'')),c=>c.charCodeAt(0));
+async function derivar(pw,salt){const m=await crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function abrir(b,pw,key){const salt=unb64(b.s);key=key||await derivar(pw,salt);
+  const p=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(b.i)},key,unb64(b.c));return{plain:JSON.parse(dec.decode(p)),key,salt}}
+async function sellar(P,key,salt){const iv=crypto.getRandomValues(new Uint8Array(12));
+  return{s:b64(salt),i:b64(iv),c:b64(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(JSON.stringify(P))))}}
+
+// ===== GitHub: lectura pública, escritura con token (leer → fusionar → escribir) =====
 const hdr=()=>({Accept:'application/vnd.github+json',...(TOKEN?{Authorization:'Bearer '+TOKEN}:{})});
 async function leerRemoto(){
   const r=await fetch(API+'?ref='+BRANCH+'&t='+Date.now(),{headers:hdr(),cache:'no-store'});
-  if(r.status===404)return{data:{aj:{},movs:[]},sha:null};
   if(!r.ok)throw new Error('GitHub respondió '+r.status);
-  const j=await r.json();return{data:JSON.parse(b64d(j.content)),sha:j.sha};
+  const j=await r.json();return{db:JSON.parse(dec.decode(unb64(j.content))),sha:j.sha};
 }
-// Patrón leer-fusionar-escribir: siempre se aplica el cambio sobre la versión más reciente de GitHub
-async function sincronizar(mutador,mensaje){
+async function sincronizar(id,mut,msg,nk){
   if(!TOKEN){abrirTok();throw new Error('falta conectar el token')}
   for(let i=0;i<3;i++){
-    const{data,sha}=await leerRemoto();data.aj=data.aj||{};data.movs=data.movs||[];
-    mutador(data);data.version=2;data.actualizado=new Date().toISOString();
-    const body={message:mensaje,content:b64e(JSON.stringify(data,null,1)),branch:BRANCH};if(sha)body.sha=sha;
+    const{db,sha}=await leerRemoto(),K=KEYS[id];let P;
+    try{P=(await abrir(db.aviones[id],null,K.key)).plain}catch(e){throw new Error('la contraseña cambió: bloquea y vuelve a entrar')}
+    mut(P);P.movs=P.movs||[];const use=nk||K;
+    db.aviones[id]=await sellar(P,use.key,use.salt);db.version=3;db.actualizado=new Date().toISOString();
+    const body={message:msg,content:b64(enc.encode(JSON.stringify(db,null,1))),branch:BRANCH,sha};
     const r=await fetch(API,{method:'PUT',headers:{...hdr(),'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(r.ok){const j=await r.json();S={aj:data.aj,movs:data.movs};SHA=j.content.sha;ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});guardarLocal();return}
+    if(r.ok){PLAIN[id]=P;KEYS[id]=use;ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});return}
     if(r.status===401||r.status===403)throw new Error('token vencido o sin permiso de escritura');
   }
   throw new Error('no se pudo guardar tras 3 intentos');
 }
 async function refrescar(){
-  try{
-    const{data,sha}=await leerRemoto();data.aj=data.aj||{};data.movs=data.movs||[];
-    if(!localStorage.getItem('jm_sync_ok')){
-      const ids=new Set(data.movs.map(m=>m.id)),pend=S.movs.filter(m=>!ids.has(m.id));
-      if(pend.length)localStorage.setItem('jm_pend',JSON.stringify(pend));
-      localStorage.setItem('jm_sync_ok','1');
-    }
-    S={aj:data.aj,movs:data.movs};SHA=sha;ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});guardarLocal();
-  }catch(e){ESTADO='off'}
+  if(!PLAIN[TAB]||dlg.open)return;
+  try{const{db}=await leerRemoto();PLAIN[TAB]=(await abrir(db.aviones[TAB],null,KEYS[TAB].key)).plain;ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}
+  catch(e){ESTADO='off'}
   render();
 }
-function pintarEstado(){
-  const ok=ESTADO==='ok',t=ok?'● En línea · '+HORA:ESTADO==='off'?'● Sin conexión · datos locales':'● Cargando…';
-  $('estado').innerHTML=`<span class="${ok?'text-emerald-400':'text-amber-400'}">${t}</span> <span class="text-slate-400">· ${TOKEN?'edición activa':'solo lectura'}</span>`;
-  $('btnTok').textContent=TOKEN?'Desconectar':'Conectar para editar';
-  $('btnTok').className=(TOKEN?'bg-slate-700 hover:bg-slate-600 border border-slate-600':'bg-emerald-700 hover:bg-emerald-600')+' px-3 py-2 rounded-lg font-semibold';
-  const p=JSON.parse(localStorage.getItem('jm_pend')||'[]');
-  $('pend').classList.toggle('hidden',!p.length);$('pendTxt').textContent=p.length+' movimiento(s) estaban guardados solo en este navegador y aún no están en la nube.';
+async function desbloquear(){
+  const pw=$('pw').value,m=$('pwMsg');if(!pw)return;m.textContent='Descifrando…';
+  try{const{db}=await leerRemoto(),r=await abrir(db.aviones[TAB],pw);
+    PLAIN[TAB]=r.plain;KEYS[TAB]={key:r.key,salt:r.salt};ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});render()}
+  catch(e){m.textContent=e.name==='OperationError'?'Contraseña incorrecta':'No se pudo leer: '+e.message}
 }
+function bloquear(id){delete PLAIN[id];delete KEYS[id];render()}
+function bloquearTodo(){PLAIN={};KEYS={};render()}
+
+// ===== Token =====
 function abrirTok(){$('t-msg').textContent='';dlgTok.showModal()}
 function quitarToken(){if(confirm('¿Desconectar este navegador? Quedará en solo lectura.')){TOKEN='';localStorage.removeItem('jm_token');render()}}
 async function guardarToken(e){
   e.preventDefault();const t=$('t-val').value.trim(),msg=$('t-msg');msg.textContent='Verificando…';
-  try{
-    const r=await fetch('https://api.github.com/repos/'+REPO,{headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+t}});
+  try{const r=await fetch('https://api.github.com/repos/'+REPO,{headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+t}});
     if(!r.ok)throw new Error(r.status===401?'Token inválido o vencido':'GitHub respondió '+r.status);
-    const j=await r.json();if(!(j.permissions&&j.permissions.push))throw new Error('El token no tiene permiso de escritura (Contents: Read and write) en este repositorio');
-    TOKEN=t;localStorage.setItem('jm_token',t);$('t-val').value='';dlgTok.close();await refrescar();toast('Conectado: ya puedes capturar');
-  }catch(err){msg.textContent=err.message}
+    const j=await r.json();if(!(j.permissions&&j.permissions.push))throw new Error('El token no tiene permiso de escritura (Contents: Read and write)');
+    TOKEN=t;localStorage.setItem('jm_token',t);$('t-val').value='';dlgTok.close();render();toast('Conectado: ya puedes capturar')}
+  catch(err){msg.textContent=err.message}
 }
-async function subirPend(){
-  const p=JSON.parse(localStorage.getItem('jm_pend')||'[]');
-  try{await sincronizar(d=>{const ids=new Set(d.movs.map(m=>m.id));p.forEach(m=>{if(!ids.has(m.id))d.movs.push(m)})},'Subir movimientos locales');localStorage.removeItem('jm_pend');render();toast('Movimientos subidos')}catch(e){toast('No se subieron: '+e.message)}
-}
-function descartarPend(){if(confirm('¿Descartar esos movimientos locales?')){localStorage.removeItem('jm_pend');pintarEstado()}}
-function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2200)}
 
-// ===== Cálculos =====
-function movsDe(id){return S.movs.filter(m=>m.avion===id&&m.fecha>CORTE)}
-function totales(id){
-  const ms=movsDe(id);
-  const ing=ms.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+m.base,0);
-  const gas=ms.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+m.base,0);
-  return {ing,gas,disp:av(id).apertura+ing-gas};
-}
-function serie(id){
-  const a=av(id), ms=movsDe(id);
-  let ultimo=7; ms.forEach(m=>{ultimo=Math.max(ultimo,+m.fecha.slice(5,7)-1)});
-  const saldo=[],gasto=[]; let acum=a.apertura;
-  for(let i=0;i<=ultimo;i++){
-    if(i<=7){saldo.push(i===7?a.apertura:a.saldo[i]);gasto.push(a.gastos[i]);continue}
-    const del=ms.filter(m=>+m.fecha.slice(5,7)-1===i);
-    acum+=del.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+m.base,0)-del.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+m.base,0);
-    saldo.push(acum);gasto.push(del.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+m.base,0));
+// ===== Cálculos por avión =====
+const movs=P=>(P.movs||[]).filter(m=>m.fecha>CORTE),suma=(a,t)=>a.filter(m=>m.tipo===t).reduce((s,m)=>s+m.base,0);
+function tot(P){const ms=movs(P),ing=suma(ms,'ingreso'),gas=suma(ms,'gasto');return{ing,gas,disp:P.apertura+ing-gas}}
+function serie(P){
+  const ms=movs(P);let u=7;ms.forEach(m=>u=Math.max(u,+m.fecha.slice(5,7)-1));const saldo=[],gasto=[];let ac=P.apertura;
+  for(let i=0;i<=u;i++){
+    if(i<=7){saldo.push(i===7?P.apertura:P.saldo[i]);gasto.push(P.gastos[i]);continue}
+    const d=ms.filter(m=>+m.fecha.slice(5,7)-1===i),g=suma(d,'gasto');ac+=suma(d,'ingreso')-g;saldo.push(ac);gasto.push(g);
   }
-  return {saldo,gasto};
+  return{saldo,gasto};
 }
-function estado(id){
-  const d=totales(id).disp, u=av(id).umbral;
-  if(d<0)return{txt:'Sin fondos: saldo por cobrar',c:'text-rose-400',b:'bg-rose-500'};
-  if(d<u)return{txt:'Por debajo del mínimo',c:'text-amber-400',b:'bg-amber-500'};
-  return{txt:'Con fondos',c:'text-emerald-400',b:'bg-emerald-500'};
-}
+function estado(P,d){return d<0?{t:'Sin fondos: saldo por cobrar',c:'text-rose-400',b:'bg-rose-500'}:d<P.umbral?{t:'Por debajo del mínimo',c:'text-amber-400',b:'bg-amber-500'}:{t:'Con fondos',c:'text-emerald-400',b:'bg-emerald-500'}}
 
-// ===== Render =====
-function render(){pintarEstado();
-  $('corte').textContent=CORTE.split('-').reverse().join('/');
-  const T=ids.map(totales), total=T.reduce((s,t)=>s+t.disp,0);
-  const enAlerta=ids.filter(i=>totales(i).disp<av(i).umbral).length;
-  const k=(t,v,c='text-white')=>`<div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><div class="text-xs text-slate-400">${t}</div><div class="num text-xl font-extrabold mt-1 ${c}">${v}</div></div>`;
-  $('kpis').innerHTML=
-    k('Disponible de la flota',mxn(total),total<0?'text-rose-400':'text-emerald-400')+
-    k('Depósitos capturados',mxn(T.reduce((s,t)=>s+t.ing,0)))+
-    k('Gastos capturados',mxn(T.reduce((s,t)=>s+t.gas,0)))+
-    k('Aviones bajo su mínimo',enAlerta+' de '+ids.length,enAlerta?'text-amber-400':'text-emerald-400');
-
-  $('cards').innerHTML=ids.map(id=>{
-    const a=av(id),t=totales(id),e=estado(id);
-    const pct=Math.max(0,Math.min(100,a.umbral>0?t.disp/(a.umbral*2)*100:0));
-    return `<article class="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 flex flex-col gap-3" style="border-top:4px solid ${a.color}">
-      <div class="flex justify-between items-start">
-        <div><h3 class="font-bold text-lg">${esc(a.nombre)}</h3><p class="text-xs text-slate-400">${esc(a.matricula)}${a.modelo?' · '+esc(a.modelo):''}</p></div>
-        <button onclick="editarAvion('${id}')" class="text-xs text-slate-400 hover:text-white underline">Editar</button>
-      </div>
-      <div><div class="text-xs text-slate-400">Disponible hoy</div>
-        <div class="num text-3xl font-extrabold ${t.disp<0?'text-rose-400':'text-white'}">${mxn(t.disp)}</div>
-        <div class="text-sm font-medium ${e.c} mt-1">${e.txt}</div></div>
-      <div class="h-2 bg-slate-700 rounded-full overflow-hidden" title="Barra: 100% = el doble del mínimo de alerta"><div class="h-full ${e.b}" style="width:${pct}%"></div></div>
-      <dl class="text-sm space-y-1 num">
-        <div class="flex justify-between"><dt class="text-slate-400">Saldo al corte</dt><dd>${mxn(a.apertura)}${S.aj[id]&&S.aj[id].apertura!==undefined?' <span class="text-amber-400 text-xs">(ajustado)</span>':''}</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-400">+ Depósitos capturados</dt><dd class="text-emerald-400">${mxn(t.ing)}</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-400">− Gastos capturados</dt><dd class="text-rose-400">${mxn(t.gas)}</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-400">Mínimo de alerta</dt><dd>${mxn(a.umbral)}</dd></div>
-      </dl>
-      <p class="text-xs text-slate-500">${esc(a.origen)}</p>
-      ${a.alertas.map(x=>`<p class="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-lg p-2">${esc(x)}</p>`).join('')}
-      <button onclick="abrirForm('${id}')" class="mt-auto py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-semibold">Capturar en ${esc(a.nombre)}</button>
-    </article>`}).join('');
-
-  $('filtros').innerHTML=['todos',...ids].map(f=>`<button onclick="filtro='${f}';render()" class="px-3 py-1 rounded-full text-xs border ${filtro===f?'bg-sky-600 border-sky-500':'border-slate-600 text-slate-300'}">${f==='todos'?'Todos':esc(av(f).nombre)}</button>`).join('');
-
-  const ms=S.movs.filter(m=>m.fecha>CORTE&&(filtro==='todos'||m.avion===filtro)).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  $('tbody').innerHTML=ms.length?ms.map(m=>`<tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
-    <td class="p-2 text-slate-400">${m.fecha}</td><td class="p-2">${esc(av(m.avion).nombre)}</td>
-    <td class="p-2 font-medium">${esc(m.concepto)}</td><td class="p-2 text-slate-400">${esc(m.folio||'—')}</td><td class="p-2 text-slate-400">${esc(m.cat)}</td>
-    <td class="p-2 text-right num font-semibold ${m.tipo==='ingreso'?'text-emerald-400':'text-slate-100'}">${m.tipo==='ingreso'?'+':'−'}${mxn(m.base)}</td>
-    <td class="p-2 text-right num text-slate-400">${mxn(m.iva)}</td>
-    <td class="p-2 text-right whitespace-nowrap"><button onclick="editar('${m.id}')" class="text-slate-400 hover:text-sky-400 px-1">Editar</button><button onclick="borrar('${m.id}')" class="text-slate-400 hover:text-rose-400 px-1">Borrar</button></td></tr>`).join('')
-    :`<tr><td colspan="8" class="p-6 text-center text-slate-500">Aún no hay movimientos posteriores al ${CORTE}. Usa «Capturar movimiento» para registrar el primero.</td></tr>`;
-  tablaMes();
-  graficas();
-}
-
-function tablaMes(){
-  const S_=ids.map(serie), n=Math.max(...S_.map(s=>s.saldo.length));
-  const cel=(v,neg)=>v==null?'<td class="p-2 text-right text-slate-600">—</td>':`<td class="p-2 text-right ${neg&&v<0?'text-rose-400':''}">${mxn(v)}</td>`;
-  let h='<thead class="text-xs text-slate-400 border-b border-slate-700"><tr><th class="p-2">Mes</th>'+ids.map(i=>`<th class="p-2 text-right" colspan="2" style="color:${SEED[i].color}">${esc(av(i).nombre)}</th>`).join('')+'</tr><tr class="text-slate-500"><th></th>'+ids.map(()=>'<th class="p-2 text-right font-normal">Gasto</th><th class="p-2 text-right font-normal">Saldo</th>').join('')+'</tr></thead><tbody>';
-  for(let m=n-1;m>=0;m--) h+=`<tr class="border-b border-slate-700/50"><td class="p-2 font-medium">${MESES[m]} 2026</td>`+ids.map((_,x)=>cel(S_[x].gasto[m],false)+cel(S_[x].saldo[m],true)).join('')+'</tr>';
-  $('tmes').innerHTML=h+'</tbody>';
-}
-function graficas(){
-  const S_=ids.map(serie), n=Math.max(...S_.map(s=>s.saldo.length)), labels=MESES.slice(0,n);
-  const opts=(fmt)=>({responsive:true,maintainAspectRatio:false,spanGaps:false,plugins:{legend:{labels:{color:'#94a3b8'}}},
-    scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{ticks:{color:'#94a3b8',callback:v=>'$'+(v/1e6).toFixed(1)+'M'},grid:{color:'rgba(51,65,85,.5)'}}}});
-  const mk=(id,type,key)=>{
-    if(charts[id])charts[id].destroy();
-    charts[id]=new Chart($(id).getContext('2d'),{type,data:{labels,datasets:ids.map((i,x)=>({label:av(i).nombre,data:S_[x][key],borderColor:SEED[i].color,backgroundColor:SEED[i].color,tension:.25,borderRadius:4}))},options:opts()});
-  };
-  mk('chSaldo','line','saldo'); mk('chGasto','bar','gasto');
+// ===== Vista =====
+function render(){
+  const ok=ESTADO==='ok';
+  $('estado').innerHTML=ESTADO?`<span class="${ok?'text-emerald-400':'text-amber-400'}">${ok?'● En línea · '+HORA:'● Sin conexión'}</span> <span class="text-slate-400">· ${TOKEN?'edición activa':'solo lectura'}</span>`:`<span class="text-slate-400">${TOKEN?'edición activa':'solo lectura'}</span>`;
+  $('btnTok').textContent=TOKEN?'Desconectar':'Conectar para editar';
+  $('btnTok').className=(TOKEN?'bg-slate-700 hover:bg-slate-600 border border-slate-600':'bg-emerald-700 hover:bg-emerald-600')+' px-3 py-2 rounded-lg font-semibold';
+  $('tabs').innerHTML=ORDER.map(([id,n])=>`<button onclick="TAB='${id}';render()" class="px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 ${TAB===id?'border-sky-400 text-white':'border-transparent text-slate-400 hover:text-slate-200'}">${PLAIN[id]?'🔓':'🔒'} ${n}</button>`).join('');
+  const P=PLAIN[TAB];
+  if(!P){
+    Object.values(charts).forEach(c=>c.destroy());charts={};
+    $('vista').innerHTML=`<div class="max-w-sm mx-auto mt-10 bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-3 text-center"><div class="text-4xl">🔒</div><h2 class="font-bold text-lg">${esc(ORDER.find(o=>o[0]===TAB)[1])}</h2><p class="text-xs text-slate-400">Escribe la contraseña de esta pestaña. Los datos están cifrados y solo se descifran en tu navegador.</p><input type="password" id="pw" autocomplete="off" onkeydown="if(event.key==='Enter')desbloquear()"><p id="pwMsg" class="text-xs text-rose-400 min-h-4"></p><button onclick="desbloquear()" class="w-full bg-sky-600 hover:bg-sky-500 rounded-lg py-2 font-semibold">Entrar</button></div>`;
+    setTimeout(()=>$('pw')&&$('pw').focus(),50);return;
+  }
+  const t=tot(P),e=estado(P,t.disp),h=P.gastos.filter(x=>x!=null),prom=h.length?h.reduce((a,b)=>a+b,0)/h.length:0;
+  const aut=t.disp>0&&prom>0?(t.disp/prom).toFixed(1)+' meses':'—',pct=Math.max(0,Math.min(100,P.umbral>0?t.disp/(P.umbral*2)*100:0));
+  const k=(a,v,c='text-white')=>`<div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><div class="text-xs text-slate-400">${a}</div><div class="num text-xl font-extrabold mt-1 ${c}">${v}</div></div>`;
+  const ms=movs(P).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  $('vista').innerHTML=`
+  <section class="rounded-2xl bg-slate-800/80 border border-slate-700 p-5 space-y-3" style="border-top:4px solid ${P.color}">
+    <div class="flex flex-wrap justify-between gap-3"><div><h2 class="font-bold text-xl">${esc(P.nombre)}</h2><p class="text-xs text-slate-400">${esc(P.matricula)}${P.modelo?' · '+esc(P.modelo):''}</p></div>
+      <div class="noprint flex flex-wrap gap-2 text-sm"><button onclick="abrirForm()" class="bg-sky-600 hover:bg-sky-500 px-3.5 py-2 rounded-lg font-semibold">Capturar movimiento</button><button onclick="editarAvion()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Editar datos</button><button onclick="cambiarClave()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Cambiar contraseña</button><button onclick="exportCSV()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">CSV</button><button onclick="window.print()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Imprimir</button><button onclick="bloquear('${TAB}')" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Bloquear</button></div></div>
+    <div><div class="text-xs text-slate-400">Disponible hoy</div><div class="num text-4xl font-extrabold ${t.disp<0?'text-rose-400':'text-white'}">${mxn(t.disp)}</div><div class="text-sm font-medium ${e.c}">${e.t}</div></div>
+    <div class="h-2 bg-slate-700 rounded-full overflow-hidden" title="100% = el doble del mínimo de alerta"><div class="h-full ${e.b}" style="width:${pct}%"></div></div>
+    <p class="text-xs text-slate-500">${esc(P.origen)}</p>
+    ${(P.alertas||[]).map(x=>`<p class="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-lg p-2">${esc(x)}</p>`).join('')}
+  </section>
+  <section class="grid grid-cols-2 lg:grid-cols-5 gap-3">${k('Saldo al corte ('+CORTE+')',mxn(P.apertura))+k('Depósitos capturados',mxn(t.ing),'text-emerald-400')+k('Gastos capturados',mxn(t.gas),'text-rose-400')+k('Gasto mensual promedio',mxn(prom))+k('Autonomía estimada',aut)}</section>
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Saldo al cierre de cada mes</h3><div class="relative h-56"><canvas id="c1"></canvas></div></div>
+    <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Gasto mensual</h3><div class="relative h-56"><canvas id="c2"></canvas></div></div>
+    <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Gasto capturado por categoría</h3><div class="relative h-56"><canvas id="c3"></canvas></div></div>
+  </section>
+  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-3">Cierre mensual</h3><div class="overflow-x-auto"><table class="w-full text-sm num" id="tmes"></table></div></section>
+  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-3">Movimientos capturados desde el corte</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left">
+    <thead class="text-xs text-slate-400 border-b border-slate-700"><tr><th class="p-2">Fecha</th><th class="p-2">Concepto</th><th class="p-2">Folio</th><th class="p-2">Categoría</th><th class="p-2 text-right">Importe (sin IVA)</th><th class="p-2 text-right">IVA</th><th class="p-2"></th></tr></thead><tbody>
+    ${ms.length?ms.map(m=>`<tr class="border-b border-slate-700/50"><td class="p-2 text-slate-400">${m.fecha}</td><td class="p-2 font-medium">${esc(m.concepto)}</td><td class="p-2 text-slate-400">${esc(m.folio||'—')}</td><td class="p-2 text-slate-400">${esc(m.cat)}</td><td class="p-2 text-right num font-semibold ${m.tipo==='ingreso'?'text-emerald-400':''}">${m.tipo==='ingreso'?'+':'−'}${mxn(m.base)}</td><td class="p-2 text-right num text-slate-400">${mxn(m.iva)}</td><td class="p-2 text-right whitespace-nowrap"><button onclick="editar('${m.id}')" class="text-slate-400 hover:text-sky-400 px-1">Editar</button><button onclick="borrar('${m.id}')" class="text-slate-400 hover:text-rose-400 px-1">Borrar</button></td></tr>`).join(''):`<tr><td colspan="7" class="p-6 text-center text-slate-500">Aún no hay movimientos posteriores al ${CORTE}.</td></tr>`}
+    </tbody></table></div><p class="text-xs text-slate-500 mt-3">Saldo = saldo inicial + depósitos − gastos, todo sin IVA, igual que en los Excel.</p></section>`;
+  const S_=serie(P),lab=MESES.slice(0,S_.saldo.length),cel=(v,n)=>v==null?'<td class="p-2 text-right text-slate-600">—</td>':`<td class="p-2 text-right ${n&&v<0?'text-rose-400':''}">${mxn(v)}</td>`;
+  let th='<thead class="text-xs text-slate-400 border-b border-slate-700"><tr><th class="p-2 text-left">Mes</th><th class="p-2 text-right">Gasto</th><th class="p-2 text-right">Saldo</th></tr></thead><tbody>';
+  for(let i=lab.length-1;i>=0;i--)th+=`<tr class="border-b border-slate-700/50"><td class="p-2 font-medium">${lab[i]} 2026</td>${cel(S_.gasto[i])}${cel(S_.saldo[i],1)}</tr>`;
+  $('tmes').innerHTML=th+'</tbody>';
+  const cats={};movs(P).filter(m=>m.tipo==='gasto').forEach(m=>cats[m.cat]=(cats[m.cat]||0)+m.base);
+  const ax={x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{ticks:{color:'#94a3b8',callback:v=>'$'+(v/1e6).toFixed(1)+'M'},grid:{color:'rgba(51,65,85,.5)'}}};
+  Object.values(charts).forEach(c=>c.destroy());
+  charts={c1:new Chart($('c1'),{type:'line',data:{labels:lab,datasets:[{data:S_.saldo,borderColor:P.color,backgroundColor:P.color,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:ax}}),
+    c2:new Chart($('c2'),{type:'bar',data:{labels:lab,datasets:[{data:S_.gasto,backgroundColor:P.color,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:ax}}),
+    c3:new Chart($('c3'),{type:'doughnut',data:{labels:Object.keys(cats).length?Object.keys(cats):['Sin gastos capturados'],datasets:[{data:Object.keys(cats).length?Object.values(cats):[1],backgroundColor:Object.keys(cats).length?PAL:['#334155'],borderColor:'#1e293b'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',boxWidth:10}}}}})};
 }
 
 // ===== Captura =====
-function abrirForm(avion){
+function abrirForm(){
   if(!TOKEN){abrirTok();return}
-  $('f-avion').innerHTML=ids.map(i=>`<option value="${i}">${esc(av(i).nombre)}</option>`).join('');
-  $('f-id').value='';$('dlgTitulo').textContent='Capturar movimiento';
-  ['f-folio','f-concepto','f-monto'].forEach(i=>$(i).value='');
-  $('f-tipo').value='gasto';$('f-mon').value='MXN';$('f-ivap').value='0.16';$('f-tc').value='18';
-  $('f-avion').value=avion||(filtro!=='todos'?filtro:ids[0]);
-  $('f-fecha').value=new Date().toISOString().slice(0,10);
-  calc();dlg.showModal();
+  $('f-id').value='';$('dlgTitulo').textContent='Capturar movimiento';['f-folio','f-concepto','f-monto'].forEach(i=>$(i).value='');
+  $('f-tipo').value='gasto';$('f-mon').value='MXN';$('f-ivap').value='0.16';$('f-tc').value='18';$('f-fecha').value=new Date().toISOString().slice(0,10);calc();dlg.showModal();
 }
-function calc(){
-  const usd=$('f-mon').value==='USD', tc=usd?(+$('f-tc').value||0):1;
-  const base=(+$('f-monto').value||0)*tc;
-  $('f-tc').disabled=!usd;
-  $('f-total').value=mxn(base*(1+ +$('f-ivap').value));
-}
+function calc(){const usd=$('f-mon').value==='USD',tc=usd?(+$('f-tc').value||0):1;$('f-tc').disabled=!usd;$('f-total').value=mxn((+$('f-monto').value||0)*tc*(1+ +$('f-ivap').value))}
 async function guardar(e){
-  e.preventDefault();
-  const usd=$('f-mon').value==='USD', tc=usd?(+$('f-tc').value||0):1;
-  const base=Math.round((+$('f-monto').value||0)*tc*100)/100;
-  const m={id:$('f-id').value||'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),avion:$('f-avion').value,tipo:$('f-tipo').value,fecha:$('f-fecha').value,
-    concepto:$('f-concepto').value.trim(),folio:$('f-folio').value.trim(),cat:$('f-cat').value,base,iva:Math.round(base*(+$('f-ivap').value)*100)/100,
-    mon:$('f-mon').value,orig:+$('f-monto').value||0,tc};
+  e.preventDefault();const usd=$('f-mon').value==='USD',tc=usd?(+$('f-tc').value||0):1,base=Math.round((+$('f-monto').value||0)*tc*100)/100;
+  const m={id:$('f-id').value||'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),tipo:$('f-tipo').value,fecha:$('f-fecha').value,concepto:$('f-concepto').value.trim(),folio:$('f-folio').value.trim(),cat:$('f-cat').value,base,iva:Math.round(base*(+$('f-ivap').value)*100)/100,mon:$('f-mon').value,orig:+$('f-monto').value||0,tc};
   if(m.fecha<=CORTE){toast('La fecha debe ser posterior al corte ('+CORTE+')');return}
-  const b=e.submitter;if(b){b.disabled=true;b.textContent='Guardando…'}
-  try{
-    await sincronizar(d=>{const i=d.movs.findIndex(x=>x.id===m.id);i>=0?d.movs[i]=m:d.movs.push(m)},(m.tipo==='ingreso'?'Depósito ':'Gasto ')+av(m.avion).nombre+': '+m.concepto);
-    dlg.close();render();toast('Guardado y sincronizado para todos');
-  }catch(err){toast('No se guardó: '+err.message)}
-  finally{if(b){b.disabled=false;b.textContent='Guardar movimiento'}}
+  const b=e.submitter;b.disabled=true;b.textContent='Guardando…';
+  try{await sincronizar(TAB,P=>{const i=P.movs.findIndex(x=>x.id===m.id);i>=0?P.movs[i]=m:P.movs.push(m)},'Movimiento '+TAB);dlg.close();render();toast('Guardado, cifrado y sincronizado')}
+  catch(err){toast('No se guardó: '+err.message)}finally{b.disabled=false;b.textContent='Guardar movimiento'}
 }
-function editar(id){
-  const m=S.movs.find(x=>x.id===id);if(!m)return;
-  abrirForm(m.avion);$('dlgTitulo').textContent='Editar movimiento';$('f-id').value=m.id;
-  $('f-tipo').value=m.tipo;$('f-fecha').value=m.fecha;$('f-folio').value=m.folio||'';$('f-concepto').value=m.concepto;
-  $('f-cat').value=m.cat;$('f-mon').value=m.mon||'MXN';$('f-tc').value=m.tc||18;$('f-monto').value=m.orig??m.base;
-  $('f-ivap').value=m.iva>0?'0.16':'0';calc();
+function editar(id){const m=PLAIN[TAB].movs.find(x=>x.id===id);if(!m)return;abrirForm();if(!TOKEN)return;
+  $('dlgTitulo').textContent='Editar movimiento';$('f-id').value=m.id;$('f-tipo').value=m.tipo;$('f-fecha').value=m.fecha;$('f-folio').value=m.folio||'';$('f-concepto').value=m.concepto;$('f-cat').value=m.cat;$('f-mon').value=m.mon||'MXN';$('f-tc').value=m.tc||18;$('f-monto').value=m.orig??m.base;$('f-ivap').value=m.iva>0?'0.16':'0';calc()}
+async function borrar(id){if(!TOKEN){abrirTok();return}if(!confirm('¿Borrar este movimiento para todos?'))return;
+  try{await sincronizar(TAB,P=>{P.movs=P.movs.filter(x=>x.id!==id)},'Borrar movimiento '+TAB);render();toast('Movimiento borrado')}catch(err){toast('No se borró: '+err.message)}}
+async function editarAvion(){
+  if(!TOKEN){abrirTok();return}const P=PLAIN[TAB];
+  const mat=prompt('Matrícula o modelo:',P.matricula);if(mat===null)return;
+  const u=prompt('Mínimo de alerta en MXN:',P.umbral);if(u===null)return;
+  const ap=prompt('Saldo al corte del '+CORTE+' en MXN:',P.apertura);if(ap===null)return;
+  const n=+ap.replace(/[,$\s]/g,'');if(!isFinite(n)||ap.trim()===''){toast('Saldo inválido');return}
+  try{await sincronizar(TAB,Q=>{Q.matricula=mat.trim()||Q.matricula;Q.umbral=Math.max(0,+u||0);Q.apertura=n},'Ajustes '+TAB);render();toast('Ajustes guardados')}catch(err){toast('No se guardó: '+err.message)}
 }
-async function borrar(id){
+async function cambiarClave(){
   if(!TOKEN){abrirTok();return}
-  if(!confirm('¿Borrar este movimiento para todos?'))return;
-  try{await sincronizar(d=>{d.movs=d.movs.filter(x=>x.id!==id)},'Borrar movimiento '+id);render();toast('Movimiento borrado')}catch(err){toast('No se borró: '+err.message)}
-}
-async function editarAvion(id){
-  if(!TOKEN){abrirTok();return}
-  const a=av(id);
-  const mat=prompt('Matrícula o modelo del avión:',a.matricula);if(mat===null)return;
-  const u=prompt('Mínimo de alerta en MXN (debajo de este saldo se marca en ámbar):',a.umbral);if(u===null)return;
-  const ap=prompt('Saldo al corte del '+CORTE+' en MXN. Déjalo igual para conservar el del Excel ('+SEED[id].apertura.toFixed(2)+'). Escribe «reset» para volver al del Excel:',a.apertura);if(ap===null)return;
-  const nuevo={...(S.aj[id]||{}),matricula:mat.trim()||a.matricula,umbral:Math.max(0,+u||0)};
-  if(ap.trim().toLowerCase()==='reset')delete nuevo.apertura;
-  else if(ap.trim()!==''&&isFinite(+ap.replace(/[,$\s]/g,'')))nuevo.apertura=+ap.replace(/[,$\s]/g,'');
-  try{await sincronizar(d=>{d.aj[id]=nuevo},'Ajustes '+SEED[id].nombre);render();toast('Ajustes sincronizados')}catch(err){toast('No se guardó: '+err.message)}
-}
-
-// ===== Respaldo =====
-function descargar(nombre,texto,tipo){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([texto],{type:tipo}));a.download=nombre;a.click();URL.revokeObjectURL(a.href)}
-const hoy=()=>new Date().toISOString().slice(0,10);
-function exportJSON(){descargar(`jetmach_control_financiero_${hoy()}.json`,JSON.stringify({version:2,corte:CORTE,...S},null,2),'application/json');toast('Respaldo descargado')}
-function importJSON(ev){
-  const f=ev.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=async()=>{try{const p=JSON.parse(r.result);if(!Array.isArray(p.movs))throw 0;
-    await sincronizar(d=>{const ids=new Set(d.movs.map(m=>m.id));p.movs.forEach(m=>{if(!ids.has(m.id))d.movs.push(m)});Object.assign(d.aj,p.aj||{})},'Importar respaldo');render();toast('Respaldo fusionado y sincronizado')}
-    catch(e){alert('No se pudo importar: '+(e.message||'el archivo no es un respaldo válido de Jet Mach Control Financiero AOC'))}};
-  r.readAsText(f);ev.target.value='';
+  const a=prompt('Nueva contraseña para esta pestaña (mínimo 10 caracteres; usa una frase larga):');if(a===null)return;
+  if(a.length<10){toast('Muy corta: mínimo 10 caracteres');return}
+  if(prompt('Repite la contraseña:')!==a){toast('No coinciden');return}
+  try{const salt=crypto.getRandomValues(new Uint8Array(16));await sincronizar(TAB,()=>{},'Cambio de contraseña '+TAB,{key:await derivar(a,salt),salt});render();toast('Contraseña cambiada. Avísale a quien la use.')}catch(err){toast('No se cambió: '+err.message)}
 }
 function exportCSV(){
-  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  const filas=[['Fecha','Avión','Tipo','Concepto','Folio','Categoría','Importe sin IVA MXN','IVA MXN']].concat(
-    S.movs.sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(m=>[m.fecha,av(m.avion).nombre,m.tipo,m.concepto,m.folio,m.cat,m.base,m.iva]));
-  descargar(`jetmach_movimientos_${hoy()}.csv`,'\ufeff'+filas.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',P=PLAIN[TAB];
+  const f=[['Fecha','Tipo','Concepto','Folio','Categoría','Importe sin IVA MXN','IVA MXN']].concat(movs(P).sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(m=>[m.fecha,m.tipo,m.concepto,m.folio,m.cat,m.base,m.iva]));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+f.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}));a.download=`jetmach_${TAB}_${new Date().toISOString().slice(0,10)}.csv`;a.click();
 }
-
 const dlg=$('dlg'),dlgTok=$('dlgTok');
-cargar();render();refrescar();
-setInterval(()=>{if(!document.hidden&&!dlg.open)refrescar()},120000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!dlg.open)refrescar()});
+render();setInterval(()=>{if(!document.hidden)refrescar()},120000);
 </script>
 </body>
 </html>
