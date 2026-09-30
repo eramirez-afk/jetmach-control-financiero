@@ -1,6 +1,6 @@
 {
  "version": 3,
- "actualizado": "2026-09-30T21:49:43.777102+00:00",
+ "actualizado": "2026-09-30T21:53:45.522827+00:00",
  "aviones": {
   "inver": {
    "s": "rWDIaxg3RqOMNMbsTDYTYg==",
@@ -17,5 +17,10 @@
    "i": "9yAvnw20b0oxauEs",
    "c": "QIW2qe5CxQJf4h//osC590T//tgyMHvqUFHQXM0BUUq43k7FjrCGu7t5x37VQbD+pXu/Cc/LQ5Q7ndfZ7oTOc5kcHPpQNuY5qXJYUYcZLDivbuqOnHn2tmbjmfaJNSnMKgT3N2TrbWCUvlomdk18GishCXOa8y3pQjTfccpkddTbkgSQnLGAxn1Vd1GW2/4RlEDxaTPOML4B493F6MVslYDu96XhNbOy+YiQeDfh+FLdI9cP5nwIPYFaVz+zI1BAVl9mht94QyoqmnuFxTn4OYHH3PMxzUQGAeapmAKZAzoB2jnKAFruDENEIon1OGTa8c3EcT9lW4tpclutYJ2Y5g6CDf3Rr8XVj4v6rvgja7IsjNeGyxiyC6wZGHu7Pvq0vudIjPutarTRlyIDbBxrEYJHmhxBDa/2qhPBEFk5KuZ6wQG8NVtnfcsnCLve4kYUHuTQUT0jajQG8v8SK5kAnfACHZ+7f39MJF48T/zUEV4U7n7u06TyRvaQp6pT5aLhqqNJ9/+eVLdLSKX0cE3xFk3YhlaWnraX24jj+Mh3KU6jUK2o743bwpVU55ow"
   }
+ },
+ "jetmach": {
+  "s": "m0rlgBT15XNP7zHe+p9KUQ==",
+  "i": "+JJp4AQzmQ4rZ3sW",
+  "c": "4MF1wjmv1qGAxtvuh5mj9hm04zGSraWAVWtfuj0sb51gW8QoRdbCYw7FjypyDYzjXzrZj/98yiCp/YZ3mD5HXPLppcgG7+Q83Ektdb7nHTU95DKjyrlg9Jm31rPWVcJRE2/eZtaGezXTtK+l5zDE7AIfnDKkOKPxwpyxxSWmAsWR"
  }
 }
