@@ -21,7 +21,7 @@ label span{display:block;font-size:.7rem;color:#94a3b8;margin-bottom:.2rem}
 <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30">
   <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
     <div><h1 class="text-lg font-bold tracking-tight">Jet Mach <span class="text-sky-400">Control Financiero AOC</span></h1>
-      <p class="text-xs text-slate-400">Datos cifrados: cada pestaña se abre solo con su contraseña</p></div>
+      <p class="text-xs text-slate-400">Datos cifrados: cada pestaña se abre solo con su contraseña; la de Jet Mach abre las tres</p></div>
     <div class="flex flex-wrap items-center gap-2 text-sm">
       <span id="estado" class="text-xs mr-1"></span>
       <button id="btnTok" onclick="TOKEN?quitarToken():abrirTok()" class="px-3 py-2 rounded-lg font-semibold"></button>
@@ -63,11 +63,11 @@ label span{display:block;font-size:.7rem;color:#94a3b8;margin-bottom:.2rem}
 <script>
 const CORTE='2026-08-31',REPO='eramirez-afk/jetmach-control-financiero',BRANCH='main',API=`https://api.github.com/repos/${REPO}/contents/data.json`;
 const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-const ORDER=[['inver','Inmobiliaria Inver'],['red','Red Ambiental'],['pasa','PASA']];
+const IDS=['inver','red','pasa'],ORDER=[['jet','Jet Mach · Flota'],['inver','Inmobiliaria Inver'],['red','Red Ambiental'],['pasa','PASA']];
 const PAL=['#38bdf8','#34d399','#fbbf24','#fb7185','#a78bfa','#f472b6','#2dd4bf','#fb923c','#94a3b8','#818cf8','#4ade80'];
 const $=id=>document.getElementById(id),mxn=v=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(v||0);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let TAB='inver',PLAIN={},KEYS={},charts={},ESTADO='',HORA='',TOKEN=localStorage.getItem('jm_token')||'';
+let TAB='jet',STALE={},PLAIN={},KEYS={},charts={},ESTADO='',HORA='',TOKEN=localStorage.getItem('jm_token')||'';
 function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2600)}
 
 // ===== Cifrado: PBKDF2 (contraseña → llave) + AES-GCM. La contraseña nunca sale del navegador =====
@@ -92,9 +92,9 @@ async function sincronizar(id,mut,msg,nk){
   if(!TOKEN){abrirTok();throw new Error('falta conectar el token')}
   for(let i=0;i<3;i++){
     const{db,sha}=await leerRemoto(),K=KEYS[id];let P;
-    try{P=(await abrir(db.aviones[id],null,K.key)).plain}catch(e){throw new Error('la contraseña cambió: bloquea y vuelve a entrar')}
-    mut(P);P.movs=P.movs||[];const use=nk||K;
-    db.aviones[id]=await sellar(P,use.key,use.salt);db.version=3;db.actualizado=new Date().toISOString();
+    try{P=(await abrir(id==='jet'?db.jetmach:db.aviones[id],null,K.key)).plain}catch(e){throw new Error('la contraseña cambió: bloquea y vuelve a entrar')}
+    mut(P);if(id!=='jet')P.movs=P.movs||[];const use=nk||K,sel=await sellar(P,use.key,use.salt);
+    if(id==='jet')db.jetmach=sel;else db.aviones[id]=sel;db.version=3;db.actualizado=new Date().toISOString();
     const body={message:msg,content:b64(enc.encode(JSON.stringify(db,null,1))),branch:BRANCH,sha};
     const r=await fetch(API,{method:'PUT',headers:{...hdr(),'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(r.ok){PLAIN[id]=P;KEYS[id]=use;ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});return}
@@ -104,14 +104,16 @@ async function sincronizar(id,mut,msg,nk){
 }
 async function refrescar(){
   if(!PLAIN[TAB]||dlg.open)return;
-  try{const{db}=await leerRemoto();PLAIN[TAB]=(await abrir(db.aviones[TAB],null,KEYS[TAB].key)).plain;ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}
+  try{const{db}=await leerRemoto();for(const i of TAB==='jet'?IDS:[TAB])if(KEYS[i])PLAIN[i]=(await abrir(db.aviones[i],null,KEYS[i].key)).plain;ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}
   catch(e){ESTADO='off'}
   render();
 }
 async function desbloquear(){
   const pw=$('pw').value,m=$('pwMsg');if(!pw)return;m.textContent='Descifrando…';
-  try{const{db}=await leerRemoto(),r=await abrir(db.aviones[TAB],pw);
-    PLAIN[TAB]=r.plain;KEYS[TAB]={key:r.key,salt:r.salt};ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});render()}
+  try{const{db}=await leerRemoto(),r=await abrir(TAB==='jet'?db.jetmach:db.aviones[TAB],pw);
+    PLAIN[TAB]=r.plain;KEYS[TAB]={key:r.key,salt:r.salt};
+    if(TAB==='jet'){STALE={};m.textContent='Abriendo los tres aviones…';for(const i of IDS){try{const a=await abrir(db.aviones[i],r.plain.pw[i]);PLAIN[i]=a.plain;KEYS[i]={key:a.key,salt:a.salt}}catch(e){STALE[i]=1}}}
+    ESTADO='ok';HORA=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});render()}
   catch(e){m.textContent=e.name==='OperationError'?'Contraseña incorrecta':'No se pudo leer: '+e.message}
 }
 function bloquear(id){delete PLAIN[id];delete KEYS[id];render()}
@@ -149,6 +151,7 @@ function render(){
   $('btnTok').textContent=TOKEN?'Desconectar':'Conectar para editar';
   $('btnTok').className=(TOKEN?'bg-slate-700 hover:bg-slate-600 border border-slate-600':'bg-emerald-700 hover:bg-emerald-600')+' px-3 py-2 rounded-lg font-semibold';
   $('tabs').innerHTML=ORDER.map(([id,n])=>`<button onclick="TAB='${id}';render()" class="px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 ${TAB===id?'border-sky-400 text-white':'border-transparent text-slate-400 hover:text-slate-200'}">${PLAIN[id]?'🔓':'🔒'} ${n}</button>`).join('');
+  if(TAB==='jet'&&PLAIN.jet){renderFlota();return}
   const P=PLAIN[TAB];
   if(!P){
     Object.values(charts).forEach(c=>c.destroy());charts={};
@@ -223,7 +226,40 @@ async function cambiarClave(){
   const a=prompt('Nueva contraseña para esta pestaña (mínimo 10 caracteres; usa una frase larga):');if(a===null)return;
   if(a.length<10){toast('Muy corta: mínimo 10 caracteres');return}
   if(prompt('Repite la contraseña:')!==a){toast('No coinciden');return}
-  try{const salt=crypto.getRandomValues(new Uint8Array(16));await sincronizar(TAB,()=>{},'Cambio de contraseña '+TAB,{key:await derivar(a,salt),salt});render();toast('Contraseña cambiada. Avísale a quien la use.')}catch(err){toast('No se cambió: '+err.message)}
+  try{const salt=crypto.getRandomValues(new Uint8Array(16));await sincronizar(TAB,()=>{},'Cambio de contraseña '+TAB,{key:await derivar(a,salt),salt});if(TAB!=='jet'&&PLAIN.jet)await sincronizar('jet',J=>{J.pw[TAB]=a},'Actualizar llave maestra');render();toast(TAB!=='jet'&&!PLAIN.jet?'Cambiada. Entra a Jet Mach y usa «Actualizar» para que la vea ahí.':'Contraseña cambiada. Avísale a quien la use.')}catch(err){toast('No se cambió: '+err.message)}
+}
+async function actualizarLlave(id){
+  if(!TOKEN){abrirTok();return}
+  const pw=prompt('Contraseña actual de '+ORDER.find(o=>o[0]===id)[1]+':');if(!pw)return;
+  try{const{db}=await leerRemoto(),r=await abrir(db.aviones[id],pw);await sincronizar('jet',J=>{J.pw[id]=pw},'Actualizar llave maestra');
+    PLAIN[id]=r.plain;KEYS[id]={key:r.key,salt:r.salt};delete STALE[id];render();toast('Actualizada')}
+  catch(e){toast(e.name==='OperationError'?'Contraseña incorrecta':'No se pudo: '+e.message)}
+}
+function renderFlota(){
+  Object.values(charts).forEach(c=>c.destroy());
+  const L=IDS.filter(i=>PLAIN[i]),T={};L.forEach(i=>T[i]=tot(PLAIN[i]));
+  const sm=f=>L.reduce((s,i)=>s+f(i),0),disp=sm(i=>T[i].disp),baj=L.filter(i=>T[i].disp<PLAIN[i].umbral).length;
+  const k=(a,v,c='text-white')=>`<div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><div class="text-xs text-slate-400">${a}</div><div class="num text-xl font-extrabold mt-1 ${c}">${v}</div></div>`;
+  const S_={};L.forEach(i=>S_[i]=serie(PLAIN[i]));const n=Math.max(...L.map(i=>S_[i].saldo.length)),lab=MESES.slice(0,n);
+  const cel=(v,c)=>v==null?'<td class="p-2 text-right text-slate-600">—</td>':`<td class="p-2 text-right ${c&&v<0?'text-rose-400':''}">${mxn(v)}</td>`;
+  let th='<thead class="text-xs text-slate-400 border-b border-slate-700"><tr><th class="p-2 text-left">Mes</th>'+L.map(i=>`<th class="p-2 text-right" colspan="2" style="color:${PLAIN[i].color}">${esc(PLAIN[i].nombre)}</th>`).join('')+'<th class="p-2 text-right">Saldo flota</th></tr></thead><tbody>';
+  for(let m=n-1;m>=0;m--){const v=L.map(i=>S_[i].saldo[m]);th+=`<tr class="border-b border-slate-700/50"><td class="p-2 font-medium">${lab[m]} 2026</td>`+L.map(i=>cel(S_[i].gasto[m])+cel(S_[i].saldo[m],1)).join('')+cel(v.some(x=>x==null)?null:v.reduce((a,b)=>a+b,0),1)+'</tr>'}
+  const ult=L.flatMap(i=>movs(PLAIN[i]).map(m=>({...m,av:PLAIN[i].nombre,c:PLAIN[i].color}))).sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,15);
+  $('vista').innerHTML=`
+  <div class="flex flex-wrap justify-between gap-3 items-center"><h2 class="font-bold text-xl">Flota Jet Mach · los tres aviones</h2><div class="noprint flex gap-2 text-sm"><button onclick="cambiarClave()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Cambiar contraseña de Jet Mach</button><button onclick="window.print()" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Imprimir</button><button onclick="bloquear('jet')" class="bg-slate-700 px-3 py-2 rounded-lg border border-slate-600">Bloquear</button></div></div>
+  ${IDS.filter(i=>!PLAIN[i]).map(i=>`<div class="bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-xl p-3 text-sm flex flex-wrap gap-3 items-center"><span>La contraseña de ${esc(ORDER.find(o=>o[0]===i)[1])} cambió y aquí no se puede abrir.</span><button onclick="actualizarLlave('${i}')" class="bg-amber-600 text-white px-3 py-1 rounded-lg font-semibold">Actualizar</button></div>`).join('')}
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">${k('Disponible de la flota',mxn(disp),disp<0?'text-rose-400':'text-emerald-400')+k('Depósitos capturados',mxn(sm(i=>T[i].ing)),'text-emerald-400')+k('Gastos capturados',mxn(sm(i=>T[i].gas)),'text-rose-400')+k('Aviones bajo su mínimo',baj+' de '+L.length,baj?'text-amber-400':'text-emerald-400')}</section>
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">${L.map(i=>{const P=PLAIN[i],e=estado(P,T[i].disp),h=P.gastos.filter(x=>x!=null),pr=h.length?h.reduce((a,b)=>a+b,0)/h.length:0,pct=Math.max(0,Math.min(100,P.umbral>0?T[i].disp/(P.umbral*2)*100:0));
+    return `<article class="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 space-y-2" style="border-top:4px solid ${P.color}"><div class="flex justify-between"><div><h3 class="font-bold">${esc(P.nombre)}</h3><p class="text-xs text-slate-400">${esc(P.matricula)}${P.modelo?' · '+esc(P.modelo):''}</p></div><button class="noprint text-xs text-slate-400 hover:text-white underline" onclick="TAB='${i}';render()">Abrir</button></div>
+    <div class="num text-3xl font-extrabold ${T[i].disp<0?'text-rose-400':''}">${mxn(T[i].disp)}</div><div class="text-sm font-medium ${e.c}">${e.t}</div><div class="h-2 bg-slate-700 rounded-full overflow-hidden"><div class="h-full ${e.b}" style="width:${pct}%"></div></div>
+    <dl class="text-sm num space-y-1"><div class="flex justify-between"><dt class="text-slate-400">Saldo al corte</dt><dd>${mxn(P.apertura)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Depósitos</dt><dd class="text-emerald-400">${mxn(T[i].ing)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Gastos</dt><dd class="text-rose-400">${mxn(T[i].gas)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Mínimo de alerta</dt><dd>${mxn(P.umbral)}</dd></div><div class="flex justify-between"><dt class="text-slate-400">Autonomía</dt><dd>${T[i].disp>0&&pr>0?(T[i].disp/pr).toFixed(1)+' meses':'—'}</dd></div></dl>
+    ${(P.alertas||[]).length?'<p class="text-xs text-amber-300">⚠ '+P.alertas.length+' aviso(s) de datos: ábrelo para verlos</p>':''}</article>`}).join('')}</section>
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-4"><div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Saldo al cierre de cada mes</h3><div class="relative h-64"><canvas id="c1"></canvas></div></div><div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-2 text-sm">Gasto mensual por avión</h3><div class="relative h-64"><canvas id="c2"></canvas></div></div></section>
+  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-3">Cierre mensual de la flota</h3><div class="overflow-x-auto"><table class="w-full text-sm num">${th}</tbody></table></div><p class="text-xs text-slate-500 mt-2">El saldo de flota solo se suma en los meses donde los tres aviones tienen dato.</p></section>
+  <section class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4"><h3 class="font-semibold mb-3">Últimos movimientos de la flota</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left"><tbody>${ult.length?ult.map(m=>`<tr class="border-b border-slate-700/50"><td class="p-2 text-slate-400">${m.fecha}</td><td class="p-2 font-semibold" style="color:${m.c}">${esc(m.av)}</td><td class="p-2">${esc(m.concepto)}</td><td class="p-2 text-slate-400">${esc(m.cat)}</td><td class="p-2 text-right num font-semibold ${m.tipo==='ingreso'?'text-emerald-400':''}">${m.tipo==='ingreso'?'+':'−'}${mxn(m.base)}</td></tr>`).join(''):'<tr><td class="p-6 text-center text-slate-500">Aún no hay movimientos posteriores al '+CORTE+'.</td></tr>'}</tbody></table></div><p class="text-xs text-slate-500 mt-2">Esta pestaña es de consulta. Para capturar, abre la pestaña de cada avión.</p></section>`;
+  const ax={x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{ticks:{color:'#94a3b8',callback:v=>'$'+(v/1e6).toFixed(1)+'M'},grid:{color:'rgba(51,65,85,.5)'}}},op={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8'}}},scales:ax};
+  charts={c1:new Chart($('c1'),{type:'line',data:{labels:lab,datasets:L.map(i=>({label:PLAIN[i].nombre,data:S_[i].saldo,borderColor:PLAIN[i].color,backgroundColor:PLAIN[i].color,tension:.25}))},options:op}),
+    c2:new Chart($('c2'),{type:'bar',data:{labels:lab,datasets:L.map(i=>({label:PLAIN[i].nombre,data:S_[i].gasto,backgroundColor:PLAIN[i].color,borderRadius:3}))},options:op})};
 }
 function exportCSV(){
   const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',P=PLAIN[TAB];
